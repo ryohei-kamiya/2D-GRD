@@ -14,6 +14,8 @@
 # limitations under the License.
 
 
-python3 lstm.py -b 100 -c cpu -m ../models/lstm-parameters.h5 \
+python3 lstm.py \
+  -b 100 \
+  -m ../models/lstm-parameters.h5 \
   -de ../data/generated/grd-points-test-s.csv \
-  -p evaluate -xil 32 -xol 16 -xss 16 -cs 2
+  -p evaluate -xil 16 -xol 1 -xss 1 -cs 2

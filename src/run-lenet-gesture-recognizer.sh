@@ -14,5 +14,7 @@
 # limitations under the License.
 
 
-python3 gesture-recognizer.py -c cpu -n lenet \
-  -lenet ../models/lenet-parameters.h5 -l ../models/labels.txt
+python3 gesture_recognizer.py \
+  -n lenet -lenet ../models/lenet-parameters.h5 \
+  -l ../models/labels.txt \
+  -ht 28 -wt 28

@@ -14,9 +14,9 @@
 # limitations under the License.
 
 
-python3 mlp.py -b 100 -r 0.001 -i 100 -v 10 -j 1 -w 0.0 -c cpu \
+python3 mlp.py -b 100 -r 0.001 -i 1000 -v 10 -j 1 -w 0.0 -c cpu \
   -mon ../tmp -m ../models/mlp-parameters.h5 \
-  -dt ../data/generated/grd-adjusted_points-training-l.csv \
-  -dv ../data/generated/grd-adjusted_points-validation-l.csv \
-  -de ../data/generated/grd-adjusted_points-test-l.csv \
-  -p train -xil 64 -cs 2
+  -dt ../data/generated/grd-sampled_points-training-l.csv \
+  -dv ../data/generated/grd-sampled_points-validation-l.csv \
+  -de ../data/generated/grd-sampled_points-test-l.csv \
+  -p train -xl 64 -cs 2

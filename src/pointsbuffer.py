@@ -35,7 +35,7 @@ class TriangleSearchCondition(enum.Enum):
 
 class PointsBuffer:
     def __init__(self):
-        self._adjusted_scale = 1.0
+        self._adjusted_scale = 0.8
         self._adjusted_length = 64
         self._center = [0.0, 0.0]
         self._points = []
@@ -157,8 +157,6 @@ class PointsBuffer:
         if condition is PointSearchCondition.MIN_ENTROPY_POINT:
             return self._search_min_entropy_point_index()
 
-        if not isinstance(point, tuple):
-            point = (0, 0)
         if condition is PointSearchCondition.MOST_FAR_POINT:
             return self._search_most_far_point_index(point)
         elif condition is PointSearchCondition.MOST_NEAR_POINT:
@@ -382,3 +380,33 @@ class PointsBuffer:
         ret = self.adjust_length()
         if ret != 0:
             return ret
+
+    def linear_interpolate_if_line_length_larger_than(self, length):
+        if len(self._points) <= 1:
+            return -1
+        repeat=True
+        while repeat:
+            repeat = False
+            for index in range(len(self._points) - 1)[::-1]:
+                p0 = self._points[index]
+                p1 = self._points[index + 1]
+                if self.distance2(p0, p1) > length**2:
+                    self._points.insert(index + 1, [(p0[0]+p1[0])*0.5, (p0[1]+p1[1])*0.5])
+                    repeat = True
+                p0 = p1
+        return 0
+
+    def round(self, ndigits=0):
+        self._points = [[round(p[0], ndigits), round(p[1], ndigits)] for p in self._points]
+
+    def remove_neighbor_same_points(self):
+        for index in range(len(self._points) - 1)[::-1]:
+            p0 = self._points[index]
+            p1 = self._points[index + 1]
+            if self.distance2(p0, p1) == 0.0:
+                self.remove_point(index + 1)
+
+    def fulfill_linear_interpolation(self):
+        self.linear_interpolate_if_line_length_larger_than(1.0)
+        self.round()
+        self.remove_neighbor_same_points()

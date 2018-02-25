@@ -100,8 +100,5 @@ ENV/
 # mypy
 .mypy_cache/
 
-data/generated/points/
-data/generated/image/
-data/generated/adjusted_points/
-data/generated/adjusted_image/
-data/generated/datafiles.tar.gz
+data/generated/
+tmp/

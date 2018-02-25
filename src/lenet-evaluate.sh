@@ -14,7 +14,8 @@
 # limitations under the License.
 
 
-python3 lenet.py -b 100 -c cpu \
+python3 lenet.py \
+  -b 100 \
   -mon ../tmp -m ../models/lenet-parameters.h5 \
-  -de ../data/generated/grd-adjusted_image-test-s.csv \
+  -de ../data/generated/grd-image-test-s.csv \
   -p evaluate -ht 28 -wt 28

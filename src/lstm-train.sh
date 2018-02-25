@@ -14,9 +14,10 @@
 # limitations under the License.
 
 
-python3 lstm.py -b 1000 -r 0.001 -i 10000 -v 100 -j 1 -w 0.0 -c cpu \
+python3 lstm.py \
+  -b 100 -r 0.001 -i 10000 -v 100 -j 1 -w 0.0 \
   -mon ../tmp -m ../models/lstm-parameters.h5 \
-  -dt ../data/generated/grd-points-training-l.csv \
-  -dv ../data/generated/grd-points-validation-l.csv \
-  -de ../data/generated/grd-points-test-l.csv \
-  -p train -xil 32 -xol 16 -xss 16 -cs 2
+  -dt ../data/generated/grd-points-training-s.csv \
+  -dv ../data/generated/grd-points-validation-s.csv \
+  -de ../data/generated/grd-points-test-s.csv \
+  -p train -xil 16 -xol 1 -xss 1 -cs 2

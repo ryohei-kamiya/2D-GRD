@@ -14,9 +14,10 @@
 # limitations under the License.
 
 
-python3 lenet.py -b 100 -r 0.001 -i 1000 -v 10 -j 1 -w 0.0 -c cpu \
+python3 lenet.py \
+  -b 100 -r 0.001 -i 1000 -v 10 -j 1 -w 0.0 \
   -mon ../tmp -m ../models/lenet-parameters.h5 \
-  -dt ../data/generated/grd-adjusted_image-training-l.csv \
-  -dv ../data/generated/grd-adjusted_image-validation-l.csv \
-  -de ../data/generated/grd-adjusted_image-test-l.csv \
+  -dt ../data/generated/grd-image-training-l.csv \
+  -dv ../data/generated/grd-image-validation-l.csv \
+  -de ../data/generated/grd-image-test-l.csv \
   -p train -ht 28 -wt 28
