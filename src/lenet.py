@@ -55,7 +55,7 @@ class LeNet:
         self._x = None
         self._pred = None
 
-    def _lenet(self, x, test=False):
+    def network(self, x, test=False):
         # Input -> 1,28,28
         # Convolution -> 16,22,22
         with nn.parameter_scope('Convolution'):
@@ -107,9 +107,6 @@ class LeNet:
             return data_iterator_csv_dataset(dataset_path, batch_size, shuffle=shuffle)
         return None
 
-    def _get_network(self, x, test=False):
-        return self._lenet(x, test)
-
     def _categorical_error(self, pred, y):
         pred_label = pred.argmax(1)
         return (pred_label != y.flat).mean()
@@ -158,7 +155,7 @@ class LeNet:
         # variables for training
         tx = nn.Variable([self._batch_size, 1, self._height, self._width])
         ty = nn.Variable([self._batch_size, 1])
-        tpred = self._get_network(tx)
+        tpred = self.network(tx)
         tpred.persistent = True
         loss = F.mean(F.softmax_cross_entropy(tpred, ty))
         solver = S.Adam(self._learning_rate)
@@ -167,7 +164,7 @@ class LeNet:
         # variables for validation
         vx = nn.Variable([self._batch_size, 1, self._height, self._width])
         vy = nn.Variable([self._batch_size, 1])
-        vpred = self._get_network(vx, True)
+        vpred = self.network(vx, True)
 
         # data iterators
         tdata = self._load_dataset(self._training_dataset_path, self._batch_size, shuffle=True)
@@ -201,7 +198,7 @@ class LeNet:
         # variables for evaluation
         x = nn.Variable([self._batch_size, 1, self._height, self._width])
         y = nn.Variable([self._batch_size, 1])
-        pred = self._get_network(x)
+        pred = self.network(x)
         self._load_model(self._model_params_path)
 
         # data iterator
@@ -211,19 +208,19 @@ class LeNet:
         np.savetxt(sys.stdout, result[0], fmt="%.0f", delimiter=",")
         print("\n[accuracy]\n{}".format(result[1]))
 
-    # Initializer for prediction
-    def init_for_predict(self):
+    # Initializer for inference
+    def init_for_infer(self):
         if self._pred is None:
-            # variables for prediction
+            # variables for inference
             self._x = nn.Variable([1, 1, self._height, self._width])
-            self._pred = self._get_network(self._x, True)
+            self._pred = self.network(self._x, True)
 
             self._load_model(self._model_params_path)
 
-    # Prediction
-    def predict(self, image):
+    # Inference
+    def infer(self, image):
         if self._pred is None:
-            self.init_for_predict()
+            self.init_for_infer()
         if image.ndim == 2:
             image = image[np.newaxis,np.newaxis,:,:]
         elif image.ndim == 3:
@@ -257,7 +254,7 @@ def get_args(model_params_path='parameters.h5', training_dataset_path="trining.c
                         type=float, default=weight_decay,
                         help='Weight decay factor of SGD update.')
     parser.add_argument('--context', '-c', type=str,
-                        default=None, help="Extension modules. ex) 'cpu', 'cuda.cudnn'.")
+                        default='cpu', help="Extension modules. ex) 'cpu', 'cuda.cudnn'.")
     parser.add_argument("--device-id", "-d", type=int, default=0,
                         help='Device ID the training run on. This is only valid if you specify `-c cuda.cudnn`.')
     parser.add_argument("--monitor-path", "-mon",
@@ -276,7 +273,7 @@ def get_args(model_params_path='parameters.h5', training_dataset_path="trining.c
                         type=str, default=evaluation_dataset_path,
                         help='Path of the evaluation dataset.')
     parser.add_argument('--process', '-p', type=str,
-                        default=None, help="(train|evaluate|predict).")
+                        default='train', help="(train|evaluate|infer).")
     parser.add_argument("--width", "-wt", type=int, default=width,
                         help='Image width.')
     parser.add_argument("--height", "-ht", type=int, default=height,
@@ -299,13 +296,13 @@ if __name__ == '__main__':
         net.train()
     elif config.process == 'evaluate':
         net.evaluate()
-    elif config.process == 'predict':
-        net.init_for_predict()
+    elif config.process == 'infer':
+        net.init_for_infer()
         if os.path.isfile(config.evaluation_dataset_path):
             logger.info("Load a dataset from {}.".format(config.evaluation_dataset_path))
             edata = data_iterator_csv_dataset(config.evaluation_dataset_path, 1, shuffle=False)
             for i in range(edata.size):
                 data = edata.next()
                 x_d = data[0]
-                result = net.predict(x_d)
-                print("prediction result = {}".format(result))
+                result = net.infer(x_d)
+                print("inference result = {}".format(result))

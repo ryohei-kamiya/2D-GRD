@@ -54,36 +54,38 @@ class LSTM:
         self._training_dataset_path = config.training_dataset_path
         self._validation_dataset_path = config.validation_dataset_path
         self._evaluation_dataset_path = config.evaluation_dataset_path
+        self._lstm_unit_name = config.lstm_unit_name
+        self._lstm_units = config.lstm_units
 
         self._h = h
         self._c = c
         self._x_in = None
         self._pred = None
 
-    def _lstm_cell(self, x_in, h=None, c=None):
+    def _lstm_cell(self, name, n_hidden, x_in, h=None, c=None):
         if h is None:
-            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, self._cols_size)))
+            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
         if c is None:
-            c = nn.Variable.from_numpy_array(np.zeros((self._batch_size, self._cols_size)))
+            c = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
 
-        # LSTM_Concatenate -> cols_size * 2
+        # LSTM_Concatenate -> n_hidden + cols_size
         h = F.concatenate(h, x_in, axis=1)
 
-        # LSTM_Affine -> cols_size
-        with nn.parameter_scope('LSTM_Affine'):
-            h1 = PF.affine(h, (self._cols_size,), base_axis=1)
+        # LSTM_Affine -> n_hidden
+        with nn.parameter_scope(name + '_Affine'):
+            h1 = PF.affine(h, (n_hidden,), base_axis=1)
 
-        # LSTM_IGate -> cols_size
-        with nn.parameter_scope('LSTM_IGate'):
-            h2 = PF.affine(h, (self._cols_size,), base_axis=1)
+        # LSTM_IGate -> n_hidden
+        with nn.parameter_scope(name + '_IGate'):
+            h2 = PF.affine(h, (n_hidden,), base_axis=1)
 
-        # LSTM_FGate -> cols_size
-        with nn.parameter_scope('LSTM_FGate'):
-            h3 = PF.affine(h, (self._cols_size,), base_axis=1)
+        # LSTM_FGate -> n_hidden
+        with nn.parameter_scope(name + '_FGate'):
+            h3 = PF.affine(h, (n_hidden,), base_axis=1)
 
-        # LSTM_OGate -> cols_size
-        with nn.parameter_scope('LSTM_OGate'):
-            h4 = PF.affine(h, (self._cols_size,), base_axis=1)
+        # LSTM_OGate -> n_hidden
+        with nn.parameter_scope(name + '_OGate'):
+            h4 = PF.affine(h, (n_hidden,), base_axis=1)
 
         # LSTM_Tanh
         h1 = F.tanh(h1)
@@ -97,20 +99,26 @@ class LSTM:
         # LSTM_Sigmoid_3
         h4 = F.sigmoid(h4)
 
-        # LSTM_Mul2 -> cols_size
+        # LSTM_Mul2 -> n_hidden
         h5 = F.mul2(h2, h1)
 
-        # LSTM_Mul2_2 -> cols_size
+        # LSTM_Mul2_2 -> n_hidden
         h6 = F.mul2(h3, c)
 
-        # LSTM_Add2 -> cols_size
+        # LSTM_Add2 -> n_hidden
         h7 = F.add2(h5, h6 ,inplace=True)
 
-        # LSTM_Tanh_2 -> cols_size
+        # LSTM_Tanh_2 -> n_hidden
         h8 = F.tanh(h7)
 
-        # LSTM_Mul2_3 -> cols_size
-        h = F.mul2(h4, h8)
+        # LSTM_Mul2_3 -> n_hidden
+        h9 = F.mul2(h4, h8)
+
+        # LSTM_C
+        c = h7
+
+        # LSTM_H
+        h = h9
 
         return (h, c)
 
@@ -128,13 +136,18 @@ class LSTM:
                         with_file_cache=True)
         return None
 
-    def _get_network(self, x_in):
+    def network(self, x_in, name='LSTM', n_hidden=32):
         hlist = []
         for x_i in F.split(x_in, axis=1):
-            self._h, self._c = self._lstm_cell(x_i, self._h, self._c)
+            self._h, self._c = self._lstm_cell(name, n_hidden, x_i, self._h, self._c)
             hlist.append(self._h)
-        result = F.stack(*hlist, axis=1)
-        return result
+        h = F.stack(*hlist, axis=1)
+        h = F.slice(h, start=[0, 0, 0],
+                stop=[self._batch_size, self._x_output_length, n_hidden],
+                step=[1, 1, 1])
+        with nn.parameter_scope(name + '_Affine_2'):
+            h = PF.affine(h, (self._x_output_length, self._cols_size))
+        return h
 
     def _regression_error(self, pred, x_out):
         return np.mean((pred - x_out)**2)
@@ -181,9 +194,7 @@ class LSTM:
         # variables for training
         tx_in = nn.Variable([self._batch_size, self._x_input_length, self._cols_size])
         tx_out = nn.Variable([self._batch_size, self._x_output_length, self._cols_size])
-        tpred = F.slice(self._get_network(tx_in), start=[0, self._x_input_length - self._x_output_length, 0],
-                stop=[self._batch_size, self._x_input_length, self._cols_size],
-                step=[1, 1, 1])
+        tpred = self.network(tx_in, self._lstm_unit_name, self._lstm_units)
         tpred.persistent = True
         loss = F.mean(F.squared_error(tpred, tx_out))
         solver = S.Adam(self._learning_rate)
@@ -192,9 +203,7 @@ class LSTM:
         # variables for validation
         vx_in = nn.Variable([self._batch_size, self._x_input_length, self._cols_size])
         vx_out = nn.Variable([self._batch_size, self._x_output_length, self._cols_size])
-        vpred = F.slice(self._get_network(vx_in), start=[0, self._x_input_length - self._x_output_length, 0],
-                stop=[self._batch_size, self._x_input_length, self._cols_size],
-                step=[1, 1, 1])
+        vpred = self.network(vx_in, self._lstm_unit_name, self._lstm_units)
 
         # data iterators
         tdata = self._load_dataset(self._training_dataset_path, self._batch_size, shuffle=True)
@@ -228,9 +237,7 @@ class LSTM:
         # variables for evaluation
         x_in = nn.Variable([self._batch_size, self._x_input_length, self._cols_size])
         x_out = nn.Variable([self._batch_size, self._x_output_length, self._cols_size])
-        pred = F.slice(self._get_network(x_in), start=[0, self._x_input_length - self._x_output_length, 0],
-                stop=[self._batch_size, self._x_input_length, self._cols_size],
-                step=[1, 1, 1])
+        pred = self.network(x_in, self._lstm_unit_name, self._lstm_units)
         self._load_model(self._model_params_path)
 
         # data iterator
@@ -238,22 +245,20 @@ class LSTM:
         e = self._evaluate(pred, x_in, x_out, edata)
         print("[mean error]\n{}".format(e))
 
-    # Initializer for prediction
-    def init_for_predict(self):
+    # Initializer for inference
+    def init_for_infer(self):
         if self._pred is None:
             self._batch_size = 1
-            # variables for prediction
+            # variables for inference
             self._x_in = nn.Variable([1, self._x_input_length, self._cols_size])
-            self._pred = F.slice(self._get_network(self._x_in), start=[0, self._x_input_length - self._x_output_length, 0],
-                    stop=[1, self._x_input_length, self._cols_size],
-                    step=[1, 1, 1])
+            self._pred = self.network(self._x_in, self._lstm_unit_name, self._lstm_units)
 
             self._load_model(self._model_params_path)
 
-    # Prediction
-    def predict(self, series):
+    # Inference
+    def infer(self, series):
         if self._pred is None:
-            self.init_for_predict()
+            self.init_for_infer()
         if series.ndim == 2:
             series = np.reshape(series, (1, series.shape[0], -1))
         if series.ndim != 3:
@@ -268,7 +273,8 @@ class LSTM:
 def get_args(model_params_path='parameters.h5', training_dataset_path="trining.csv",
         validation_dataset_path="validation.csv", evaluation_dataset_path="evaluation.csv",
         monitor_path='.', max_iter=100, learning_rate=0.001, batch_size=100, weight_decay=0,
-        x_input_length=32, x_output_length=16, process="train", description=None):
+        process="train", x_input_length=128, x_output_length=64, x_split_step=16, columns_size=2,
+        lstm_unit_name="LSTM", lstm_units=32, description=None):
     if description is None:
         description = "LSTM"
     parser = argparse.ArgumentParser(description)
@@ -285,7 +291,7 @@ def get_args(model_params_path='parameters.h5', training_dataset_path="trining.c
                         type=float, default=weight_decay,
                         help='Weight decay factor of SGD update.')
     parser.add_argument('--context', '-c', type=str,
-                        default=None, help="Extension modules. ex) 'cpu', 'cuda.cudnn'.")
+                        default='cpu', help="Extension modules. ex) 'cpu', 'cuda.cudnn'.")
     parser.add_argument("--device-id", "-d", type=int, default=0,
                         help='Device ID the training run on. This is only valid if you specify `-c cuda.cudnn`.')
     parser.add_argument("--monitor-path", "-mon",
@@ -304,15 +310,19 @@ def get_args(model_params_path='parameters.h5', training_dataset_path="trining.c
                         type=str, default=evaluation_dataset_path,
                         help='Path of the evaluation dataset.')
     parser.add_argument('--process', '-p', type=str,
-                        default=None, help="(train|evaluate|predict).")
-    parser.add_argument("--x-input-length", "-xil", type=int, default=32,
+                        default='train', help="(train|evaluate|infer).")
+    parser.add_argument("--x-input-length", "-xil", type=int, default=x_input_length,
                         help='Length of time-series into the network.')
-    parser.add_argument("--x-output-length", "-xol", type=int, default=16,
+    parser.add_argument("--x-output-length", "-xol", type=int, default=x_output_length,
                         help='Length of time-series from the network.')
-    parser.add_argument("--x-split-step", "-xss", type=int, default=32,
+    parser.add_argument("--x-split-step", "-xss", type=int, default=x_split_step,
                         help='Step size to split time-series.')
-    parser.add_argument("--columns-size", "-cs", type=int, default=2,
+    parser.add_argument("--columns-size", "-cs", type=int, default=columns_size,
                         help='Columns size of time-series matrix.')
+    parser.add_argument("--lstm-unit-name", "-lstmn", type=str, default=lstm_unit_name,
+                        help='LSTM unit name.')
+    parser.add_argument("--lstm-units", "-lstmu", type=int, default=lstm_units,
+                        help='The number of LSTM units.')
     args = parser.parse_args()
     return args
 
@@ -331,8 +341,8 @@ if __name__ == '__main__':
         net.train()
     elif config.process == 'evaluate':
         net.evaluate()
-    elif config.process == 'predict':
-        net.init_for_predict()
+    elif config.process == 'infer':
+        net.init_for_infer()
         if os.path.isfile(config.evaluation_dataset_path):
             logger.info("Load a dataset from {}.".format(config.evaluation_dataset_path))
             edata = data_iterator_timeseries(config.evaluation_dataset_path, 1,
@@ -347,5 +357,5 @@ if __name__ == '__main__':
             for i in range(edata.size):
                 data = edata.next()
                 x_in_d = data[0]
-                result = net.predict(x_in_d)
+                result = net.infer(x_in_d)
                 np.savetxt(sys.stdout, result, delimiter=',')

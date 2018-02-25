@@ -15,5 +15,5 @@
 
 
 python3 mlp.py -b 100 -c cpu -m ../models/mlp-parameters.h5 \
-  -de ../data/generated/grd-adjusted_points-test-s.csv \
-  -p evaluate -xil 64 -cs 2
+  -de ../data/generated/grd-sampled_points-test-s.csv \
+  -p evaluate -xl 64 -cs 2

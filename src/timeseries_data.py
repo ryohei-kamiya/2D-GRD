@@ -26,7 +26,7 @@ from nnabla.logger import logger
 
 class TimeseriesDataSource(CsvDataSource):
 
-    def __init__(self, dataset_path, x_input_length=32, x_output_length=16, x_split_step=32, shuffle=False, rng=None):
+    def __init__(self, dataset_path, x_input_length=48, x_output_length=16, x_split_step=16, shuffle=False, rng=None):
         if rng is None:
             rng = np.random.RandomState(313)
         self.rng = rng

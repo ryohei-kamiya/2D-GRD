@@ -40,7 +40,7 @@ class MLP:
         self._device_id = config.device_id
         self._process = config.process
         self._cols_size = config.columns_size
-        self._x_input_length = config.x_input_length
+        self._x_length = config.x_length
         self._batch_size = config.batch_size
         self._max_iter = config.max_iter
         self._learning_rate = config.learning_rate
@@ -55,7 +55,7 @@ class MLP:
         self._x = None
         self._pred = None
 
-    def _mlp(self, x):
+    def network(self, x):
         # Input -> 64,2
         # Affine -> 100
         with nn.parameter_scope('Affine'):
@@ -72,9 +72,6 @@ class MLP:
             logger.info("Load a dataset from {}.".format(dataset_path))
             return data_iterator_csv_dataset(dataset_path, batch_size, shuffle=shuffle)
         return None
-
-    def _get_network(self, x):
-        return self._mlp(x)
 
     def _categorical_error(self, pred, y):
         pred_label = pred.argmax(1)
@@ -122,18 +119,18 @@ class MLP:
     # Training
     def train(self):
         # variables for training
-        tx = nn.Variable([self._batch_size, self._x_input_length, self._cols_size])
+        tx = nn.Variable([self._batch_size, self._x_length, self._cols_size])
         ty = nn.Variable([self._batch_size, 1])
-        tpred = self._get_network(tx)
+        tpred = self.network(tx)
         tpred.persistent = True
         loss = F.mean(F.softmax_cross_entropy(tpred, ty))
         solver = S.Adam(self._learning_rate)
         solver.set_parameters(nn.get_parameters())
 
         # variables for validation
-        vx = nn.Variable([self._batch_size, self._x_input_length, self._cols_size])
+        vx = nn.Variable([self._batch_size, self._x_length, self._cols_size])
         vy = nn.Variable([self._batch_size, 1])
-        vpred = self._get_network(vx)
+        vpred = self.network(vx)
 
         # data iterators
         tdata = self._load_dataset(self._training_dataset_path, self._batch_size, shuffle=True)
@@ -165,9 +162,9 @@ class MLP:
     # Evaluation
     def evaluate(self):
         # variables for evaluation
-        x = nn.Variable([self._batch_size, self._x_input_length, self._cols_size])
+        x = nn.Variable([self._batch_size, self._x_length, self._cols_size])
         y = nn.Variable([self._batch_size, 1])
-        pred = self._get_network(x)
+        pred = self.network(x)
         self._load_model(self._model_params_path)
 
         # data iterator
@@ -177,24 +174,24 @@ class MLP:
         np.savetxt(sys.stdout, result[0], fmt="%.0f", delimiter=",")
         print("\n[accuracy]\n{}".format(result[1]))
 
-    # Initializer for prediction
-    def init_for_predict(self):
+    # Initializer for inference
+    def init_for_infer(self):
         if self._pred is None:
-            # variables for prediction
-            self._x = nn.Variable([1, self._x_input_length, self._cols_size])
-            self._pred = self._get_network(self._x)
+            # variables for inference
+            self._x = nn.Variable([1, self._x_length, self._cols_size])
+            self._pred = self.network(self._x)
 
             self._load_model(self._model_params_path)
 
-    # Prediction
-    def predict(self, series):
+    # Inference
+    def infer(self, series):
         if self._pred is None:
-            self.init_for_predict()
+            self.init_for_infer()
         if series.ndim == 2:
             series = np.reshape(series, (1, series.shape[0], -1))
         if series.ndim != 3:
             return None
-        if series.shape[1] < self._x_input_length:
+        if series.shape[1] < self._x_length:
             return None
         self._x.d = series[:1,:,:]
         self._pred.forward(clear_buffer=True)
@@ -204,7 +201,7 @@ class MLP:
 def get_args(model_params_path='parameters.h5', training_dataset_path="trining.csv",
         validation_dataset_path="validation.csv", evaluation_dataset_path="evaluation.csv",
         monitor_path='.', max_iter=100, learning_rate=0.001, batch_size=100, weight_decay=0,
-        x_input_length=64, process="train", description=None):
+        x_length=64, process="train", description=None):
     if description is None:
         description = "MLP"
     parser = argparse.ArgumentParser(description)
@@ -221,7 +218,7 @@ def get_args(model_params_path='parameters.h5', training_dataset_path="trining.c
                         type=float, default=weight_decay,
                         help='Weight decay factor of SGD update.')
     parser.add_argument('--context', '-c', type=str,
-                        default=None, help="Extension modules. ex) 'cpu', 'cuda.cudnn'.")
+                        default='cpu', help="Extension modules. ex) 'cpu', 'cuda.cudnn'.")
     parser.add_argument("--device-id", "-d", type=int, default=0,
                         help='Device ID the training run on. This is only valid if you specify `-c cuda.cudnn`.')
     parser.add_argument("--monitor-path", "-mon",
@@ -240,8 +237,8 @@ def get_args(model_params_path='parameters.h5', training_dataset_path="trining.c
                         type=str, default=evaluation_dataset_path,
                         help='Path of the evaluation dataset.')
     parser.add_argument('--process', '-p', type=str,
-                        default=None, help="(train|evaluate|predict).")
-    parser.add_argument("--x-input-length", "-xil", type=int, default=32,
+                        default='train', help="(train|evaluate|infer).")
+    parser.add_argument("--x-length", "-xl", type=int, default=32,
                         help='Length of time-series into the network.')
     parser.add_argument("--columns-size", "-cs", type=int, default=2,
                         help='Columns size of time-series matrix.')
@@ -263,13 +260,13 @@ if __name__ == '__main__':
         net.train()
     elif config.process == 'evaluate':
         net.evaluate()
-    elif config.process == 'predict':
-        net.init_for_predict()
+    elif config.process == 'infer':
+        net.init_for_infer()
         if os.path.isfile(config.evaluation_dataset_path):
             logger.info("Load a dataset from {}.".format(config.evaluation_dataset_path))
             edata = data_iterator_csv_dataset(config.evaluation_dataset_path, 1, shuffle=False)
             for i in range(edata.size):
                 data = edata.next()
                 x_d = data[0]
-                result = net.predict(x_d)
-                print("prediction result = {}".format(result))
+                result = net.infer(x_d)
+                print("inference result = {}".format(result))

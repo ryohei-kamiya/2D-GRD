@@ -14,6 +14,8 @@
 # limitations under the License.
 
 
-python3 gesture-recognizer.py -c cpu -n mlp-with-lstm \
-  -mlp ../models/mlp-parameters.h5 \
-  -lstm ../models/lstm-parameters.h5 -l ../models/labels.txt
+python3 gesture_recognizer.py \
+  -n mlp-with-lstm -mlp ../models/mlp-parameters.h5 \
+  -lstm ../models/lstm-with-baseshift-parameters.h5 \
+  -l ../models/labels.txt \
+  -xl 64 -xil 16 -xol 1 -xss 1
