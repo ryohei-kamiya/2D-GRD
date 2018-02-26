@@ -77,10 +77,10 @@ class LSTM:
 
     def _lstm_cell(self, name, n_hidden, x_in, h=None, c=None):
         if h is None:
-            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
+            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, self._cols_size)))
         if c is None:
             c = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
-        h = F.concatenate(h, x_in, axis=1) # LSTM_Concatenate -> n_hidden + cols_size
+        h = F.concatenate(h, x_in, axis=1) # LSTM_Concatenate -> cols_size * 2
         with nn.parameter_scope(name + '_Affine'): # LSTM_Affine -> n_hidden
             h1 = PF.affine(h, (n_hidden,), base_axis=1)
         with nn.parameter_scope(name + '_IGate'): # LSTM_IGate -> n_hidden
@@ -106,13 +106,13 @@ class LSTM:
         hlist = []
         for x_i in F.split(x_in, axis=1):
             self._h, self._c = self._lstm_cell(name, n_hidden, x_i, self._h, self._c)
+            with nn.parameter_scope(name + '_Affine_2'):
+                self._h = PF.affine(self._h, (self._cols_size,))
             hlist.append(self._h)
         h = F.stack(*hlist, axis=1)
-        h = F.slice(h, start=[0, 0, 0],
-                stop=[self._batch_size, self._x_output_length, n_hidden],
+        h = F.slice(h, start=[0, h.shape[1]-self._x_output_length, 0],
+                stop=[self._batch_size, h.shape[1], self._cols_size],
                 step=[1, 1, 1])
-        with nn.parameter_scope(name + '_Affine_2'):
-            h = PF.affine(h, (self._x_output_length, self._cols_size))
         return h
 
     def _regression_error(self, pred, x_out):

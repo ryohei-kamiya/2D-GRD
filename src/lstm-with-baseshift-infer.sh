@@ -15,6 +15,6 @@
 
 
 python3 lstm_with_baseshift.py \
-  -m ../models/lstm-with-baseshift-parameters.h5 \
+  -m ../models/lstm-with-baseshift-i64-parameters.h5 \
   -de ../data/generated/grd-points-test-s.csv \
-  -p infer -xil 16 -xol 1 -xss 1 -cs 2
+  -p infer -xil 64 -xol 1 -xss 1 -cs 2

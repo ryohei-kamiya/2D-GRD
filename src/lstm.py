@@ -62,13 +62,27 @@ class LSTM:
         self._x_in = None
         self._pred = None
 
+    def _load_dataset(self, dataset_path, batch_size=100, shuffle=False):
+        if os.path.isfile(dataset_path):
+            logger.info("Load a dataset from {}.".format(dataset_path))
+            return data_iterator_timeseries(dataset_path, batch_size,
+                        x_input_length=self._x_input_length,
+                        x_output_length=self._x_output_length,
+                        x_split_step=self._x_split_step,
+                        rng=None,
+                        shuffle=shuffle,
+                        with_memory_cache=True,
+                        with_parallel=False,
+                        with_file_cache=True)
+        return None
+
     def _lstm_cell(self, name, n_hidden, x_in, h=None, c=None):
         if h is None:
-            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
+            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, self._cols_size)))
         if c is None:
             c = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
 
-        # LSTM_Concatenate -> n_hidden + cols_size
+        # LSTM_Concatenate -> cols_size * 2
         h = F.concatenate(h, x_in, axis=1)
 
         # LSTM_Affine -> n_hidden
@@ -122,31 +136,17 @@ class LSTM:
 
         return (h, c)
 
-    def _load_dataset(self, dataset_path, batch_size=100, shuffle=False):
-        if os.path.isfile(dataset_path):
-            logger.info("Load a dataset from {}.".format(dataset_path))
-            return data_iterator_timeseries(dataset_path, batch_size,
-                        x_input_length=self._x_input_length,
-                        x_output_length=self._x_output_length,
-                        x_split_step=self._x_split_step,
-                        rng=None,
-                        shuffle=shuffle,
-                        with_memory_cache=True,
-                        with_parallel=False,
-                        with_file_cache=True)
-        return None
-
     def network(self, x_in, name='LSTM', n_hidden=32):
         hlist = []
         for x_i in F.split(x_in, axis=1):
             self._h, self._c = self._lstm_cell(name, n_hidden, x_i, self._h, self._c)
+            with nn.parameter_scope(name + '_Affine_2'):
+                self._h = PF.affine(self._h, (self._cols_size,))
             hlist.append(self._h)
         h = F.stack(*hlist, axis=1)
-        h = F.slice(h, start=[0, 0, 0],
-                stop=[self._batch_size, self._x_output_length, n_hidden],
+        h = F.slice(h, start=[0, h.shape[1]-self._x_output_length, 0],
+                stop=[self._batch_size, h.shape[1], self._cols_size],
                 step=[1, 1, 1])
-        with nn.parameter_scope(name + '_Affine_2'):
-            h = PF.affine(h, (self._x_output_length, self._cols_size))
         return h
 
     def _regression_error(self, pred, x_out):

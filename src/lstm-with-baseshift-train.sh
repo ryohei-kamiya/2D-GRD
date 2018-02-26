@@ -16,8 +16,8 @@
 
 python3 lstm_with_baseshift.py \
   -b 100 -r 0.001 -i 10000 -v 100 -j 1 -w 0.0 \
-  -mon ../tmp -m ../models/lstm-with-baseshift-parameters.h5 \
+  -mon ../tmp -m ../models/lstm-with-baseshift-i64-parameters.h5 \
   -dt ../data/generated/grd-points-training-s.csv \
   -dv ../data/generated/grd-points-validation-s.csv \
   -de ../data/generated/grd-points-test-s.csv \
-  -p train -xil 16 -xol 1 -xss 1 -cs 2
+  -p train -xil 64 -xol 1 -xss 1 -cs 2

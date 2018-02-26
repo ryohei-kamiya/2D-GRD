@@ -31,7 +31,7 @@ from numpy.random import seed
 
 def get_args(mlp_model_params_path="mlp-parameters.h5", lstm_model_params_path="lstm-parameters.h5",
             labels_path="labels.txt", x_length=64, x_input_length=128, x_output_length=64, x_split_step=16,
-            description=None):
+            lstm_unit_name="LSTM", lstm_units=32, description=None):
     if description is None:
         description = "Gesture recognizer"
     parser = argparse.ArgumentParser(description)
@@ -52,6 +52,10 @@ def get_args(mlp_model_params_path="mlp-parameters.h5", lstm_model_params_path="
                         help='Length of points from the lstm network.')
     parser.add_argument("--x-split-step", "-xss", type=int, default=x_split_step,
                         help='Step size to split points.')
+    parser.add_argument("--lstm-unit-name", "-lstmn", type=str, default=lstm_unit_name,
+                        help='LSTM unit name.')
+    parser.add_argument("--lstm-units", "-lstmu", type=int, default=lstm_units,
+                        help='The number of LSTM units.')
     args = parser.parse_args()
     return args
 
@@ -99,38 +103,37 @@ class LSTM:
         self._x_split_step = config.x_split_step
         self._model_params_path = config.lstm_model_params_path
         self._lstm_unit_name = config.lstm_unit_name
+        self._lstm_units = config.lstm_units
         self._h = h
         self._c = c
         self._x_in = nn.Variable([1, self._x_input_length, self._cols_size])
-        self._pred = F.slice(self.network(self._x_in, self._lstm_unit_name), start=[0, 0, 0],
-                stop=[1, self._x_output_length, self._cols_size],
-                step=[1, 1, 1])
+        self._pred = self.network(self._x_in, self._lstm_unit_name, self._lstm_units)
         nn.load_parameters(self._model_params_path)
 
-    def _lstm_cell(self, name, x_in, h=None, c=None):
+    def _lstm_cell(self, name, n_hidden, x_in, h=None, c=None):
         if h is None:
-            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, 32)))
+            h = nn.Variable.from_numpy_array(np.zeros((self._batch_size, self._cols_size)))
         if c is None:
-            c = nn.Variable.from_numpy_array(np.zeros((self._batch_size, 32)))
+            c = nn.Variable.from_numpy_array(np.zeros((self._batch_size, n_hidden)))
 
-        # LSTM_Concatenate -> 32 + cols_size
+        # LSTM_Concatenate -> cols_size * 2
         h = F.concatenate(h, x_in, axis=1)
 
-        # LSTM_Affine -> 32
+        # LSTM_Affine -> n_hidden
         with nn.parameter_scope(name + '_Affine'):
-            h1 = PF.affine(h, (32,), base_axis=1)
+            h1 = PF.affine(h, (n_hidden,), base_axis=1)
 
-        # LSTM_IGate -> 32
+        # LSTM_IGate -> n_hidden
         with nn.parameter_scope(name + '_IGate'):
-            h2 = PF.affine(h, (32,), base_axis=1)
+            h2 = PF.affine(h, (n_hidden,), base_axis=1)
 
-        # LSTM_FGate -> 32
+        # LSTM_FGate -> n_hidden
         with nn.parameter_scope(name + '_FGate'):
-            h3 = PF.affine(h, (32,), base_axis=1)
+            h3 = PF.affine(h, (n_hidden,), base_axis=1)
 
-        # LSTM_OGate -> 32
+        # LSTM_OGate -> n_hidden
         with nn.parameter_scope(name + '_OGate'):
-            h4 = PF.affine(h, (32,), base_axis=1)
+            h4 = PF.affine(h, (n_hidden,), base_axis=1)
 
         # LSTM_Tanh
         h1 = F.tanh(h1)
@@ -144,19 +147,19 @@ class LSTM:
         # LSTM_Sigmoid_3
         h4 = F.sigmoid(h4)
 
-        # LSTM_Mul2 -> 32
+        # LSTM_Mul2 -> n_hidden
         h5 = F.mul2(h2, h1)
 
-        # LSTM_Mul2_2 -> 32
+        # LSTM_Mul2_2 -> n_hidden
         h6 = F.mul2(h3, c)
 
-        # LSTM_Add2 -> 32
+        # LSTM_Add2 -> n_hidden
         h7 = F.add2(h5, h6 ,inplace=True)
 
-        # LSTM_Tanh_2 -> 32
+        # LSTM_Tanh_2 -> n_hidden
         h8 = F.tanh(h7)
 
-        # LSTM_Mul2_3 -> 32
+        # LSTM_Mul2_3 -> n_hidden
         h9 = F.mul2(h4, h8)
 
         # LSTM_C
@@ -167,17 +170,17 @@ class LSTM:
 
         return (h, c)
 
-    def network(self, x_in, name='LSTM'):
+    def network(self, x_in, name='LSTM', n_hidden=32):
         hlist = []
         for x_i in F.split(x_in, axis=1):
-            self._h, self._c = self._lstm_cell(name, x_i, self._h, self._c)
+            self._h, self._c = self._lstm_cell(name, n_hidden, x_i, self._h, self._c)
+            with nn.parameter_scope(name + '_Affine_2'):
+                self._h = PF.affine(self._h, (self._cols_size,))
             hlist.append(self._h)
         h = F.stack(*hlist, axis=1)
-        h = F.slice(h, start=[0, 0, 0],
-                stop=[self._batch_size, self._x_output_length, 32],
+        h = F.slice(h, start=[0, h.shape[1]-self._x_output_length, 0],
+                stop=[self._batch_size, h.shape[1], self._cols_size],
                 step=[1, 1, 1])
-        with nn.parameter_scope(name + '_Affine_2'):
-            h = PF.affine(h, (self._x_output_length, self._cols_size))
         return h
 
     # Inference
@@ -205,7 +208,8 @@ class GestureRecognizer:
         self._config.x_input_length = args.x_input_length
         self._config.x_output_length = args.x_output_length
         self._config.x_split_step = args.x_split_step
-        self._config.lstm_unit_name = 'LSTM'
+        self._config.lstm_unit_name = args.lstm_unit_name
+        self._config.lstm_units = args.lstm_units
         self._config.lstm_model_params_path = args.lstm_model_params_path
         self._config.mlp_model_params_path = args.mlp_model_params_path
         self._config.labels_path = args.labels_path
