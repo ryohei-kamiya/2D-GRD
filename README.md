@@ -1,6 +1,7 @@
 # 2D-GRD
 ## 概要
-ソニーのNeural Network Console / Libariesを使って二次元のジェスチャー認識／予測を行うトイ・プログラムです。
+ソニーのNeural Network Console / Libariesを使って二次元のジェスチャー認識／予測を行うトイ・プログラムです。[ソニーのNeural Network Console大勉強会 #2](https://delta.connpass.com/event/77373/)用のコンテンツとして作成しました。その際の発表資料は[こちら](https://www.slideshare.net/k38ryh/neural-network-console2)に上げています。  
+
 本リポジトリは以下のプログラム（Python3スクリプト）を含みます。
 
 - ２次元のジェスチャー（一筆書きの点列データ）を記録するプログラム
