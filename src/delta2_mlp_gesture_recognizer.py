@@ -139,7 +139,7 @@ class GestureRecognizer:
         self._points_buf.adjust()
         points = self._points_buf.get_points()
         result_label = self._mlp.infer(np.asarray(points))
-        if self._labels is not None:
+        if self._labels is not None and result_label is not None:
             result_label = self._labels[result_label]
         return result_label
 
@@ -212,7 +212,8 @@ class GesturePainter:
 
     def _on_canvas_released(self, event):
         result_label = self._recognizer.infer(self._points)
-        self._result_txt.set("You drew " + result_label)
+        if result_label is not None:
+            self._result_txt.set("You drew " + result_label)
 
     def _on_clear_btn_pressed(self):
         self._canvas.delete("all")
