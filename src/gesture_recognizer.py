@@ -239,6 +239,18 @@ class GestureRecognizer:
     def get_network_type(self):
         return self._net_type
 
+    # predict next points
+    def predict(self, points):
+        tmp_points = self._standardize(points)
+        for i in range(0, self._config.x_input_length, self._config.x_split_step):
+            xin = self._subtract_point_from_points(
+                    tmp_points[-self._config.x_input_length:],
+                    tmp_points[-1])
+            xout = self._lstm.infer(np.asarray(xin)).tolist()
+            pred = self._add_point_to_points(xout, tmp_points[-1])
+            tmp_points.extend(pred)
+        return self._unstandardize(tmp_points)
+
     # recognize a gesture
     def infer(self, points, stroke_terminal=True):
         result_label = None
@@ -254,18 +266,9 @@ class GestureRecognizer:
             result_label = self._lenet.infer(image/255.0)
         else:
             if not stroke_terminal :
-                tmp_points = self._standardize(points)
-                for i in range(0, self._config.x_input_length, self._config.x_split_step):
-                    xin = self._subtract_point_from_points(
-                            tmp_points[-self._config.x_input_length:],
-                            tmp_points[-1])
-                    xout = self._lstm.infer(np.asarray(xin)).tolist()
-                    pred = self._add_point_to_points(
-                            xout, tmp_points[-1])
-                    result_points.extend(pred)
-                    tmp_points.extend(pred)
-                result_points = self._unstandardize(result_points)
-                points = self._unstandardize(tmp_points)
+                tmp_points = self.predict(points)
+                result_points = tmp_points[len(points):]
+                points = tmp_points
             self._points_buf.set_points(points)
             self._points_buf.adjust()
             points = self._points_buf.get_points()
