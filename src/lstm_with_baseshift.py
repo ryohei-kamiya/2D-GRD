@@ -23,7 +23,7 @@ import nnabla.parametric_functions as PF
 import nnabla.solvers as S
 import nnabla.utils.save as save
 import nnabla.logger as logger
-from nnabla.contrib.context import extension_context
+from nnabla.ext_utils import get_extension_context
 from nnabla.monitor import Monitor, MonitorSeries, MonitorTimeElapsed
 
 from timeseries_data_with_baseshift import data_iterator_timeseries
@@ -332,7 +332,7 @@ if __name__ == '__main__':
     logger.info("Running in %s" % config.context)
 
     seed(0)
-    ctx = extension_context(config.context, device_id = config.device_id)
+    ctx = get_extension_context(config.context, device_id = config.device_id)
     nn.set_default_context(ctx)
     nn.clear_parameters()
     net = LSTM(config)

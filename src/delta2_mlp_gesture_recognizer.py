@@ -23,7 +23,7 @@ import nnabla as nn
 import nnabla.functions as F
 import nnabla.parametric_functions as PF
 import nnabla.logger as logger
-from nnabla.contrib.context import extension_context
+from nnabla.ext_utils import get_extension_context
 
 import numpy as np
 from numpy.random import seed
@@ -105,7 +105,7 @@ class GestureRecognizer:
 
         seed(0)
         logger.info("Running in %s" % self._config.context)
-        self._ctx = extension_context(self._config.context, device_id = self._config.device_id)
+        self._ctx = get_extension_context(self._config.context, device_id = self._config.device_id)
         nn.set_default_context(self._ctx)
         nn.clear_parameters()
         self._mlp = MLP(self._config)
