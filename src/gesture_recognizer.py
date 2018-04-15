@@ -335,6 +335,24 @@ class GesturePainter:
     def _draw_line(self, p0, p1, color, width=1):
         self._canvas.create_line(p0[0], p0[1], p1[0], p1[1], fill = color, width=width)
 
+    def _show_prediction(self):
+        if len(self._points) % self._config.x_split_step == 0 and \
+                len(self._points) >= self._config.x_input_length:
+            result_label, result_points = self._recognizer.infer(self._points, False)
+            if len(self._pred_points) > 1:
+                p2 = self._pred_points[0]
+                for p3 in self._pred_points[1:]:
+                    self._draw_line(p2, p3, color="white", width=2)
+                    p2 = p3
+            if len(result_points) > 1:
+                p2 = result_points[0]
+                for p3 in result_points[1:]:
+                    self._draw_line(p2, p3, color="red", width=2)
+                    p2 = p3
+            self._pred_points = result_points
+            if result_label is not None:
+                self._result_txt.set("You will draw " + result_label)
+
     def _on_canvas_dragged(self, event):
         if self._minx <= event.x and event.x <= self._maxx:
             if self._miny <= event.y and event.y <= self._maxy:
@@ -345,22 +363,7 @@ class GesturePainter:
                 self._x = event.x
                 self._y = event.y
                 if self._recognizer.get_network_type() == 'mlp-with-lstm':
-                    if len(self._points) % self._config.x_split_step == 0 and \
-                            len(self._points) >= self._config.x_input_length:
-                        result_label, result_points = self._recognizer.infer(self._points, False)
-                        if len(self._pred_points) > 1:
-                            p2 = self._pred_points[0]
-                            for p3 in self._pred_points[1:]:
-                                self._draw_line(p2, p3, color="white", width=2)
-                                p2 = p3
-                        if len(result_points) > 1:
-                            p2 = result_points[0]
-                            for p3 in result_points[1:]:
-                                self._draw_line(p2, p3, color="red", width=2)
-                                p2 = p3
-                        self._pred_points = result_points
-                        if result_label is not None:
-                            self._result_txt.set("You will draw " + result_label)
+                    self._show_prediction()
                 self._draw_line(p0, p1, color="black", width=2)
 
     def _on_clear_btn_pressed(self):
